@@ -1,0 +1,1780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DocuScan Pro — Image to Editable Document</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #13131a;
+    --surface2: #1c1c28;
+    --border: #2a2a3d;
+    --accent: #6c63ff;
+    --accent2: #ff6584;
+    --accent3: #43e8b4;
+    --text: #f0f0f8;
+    --text2: #8888aa;
+    --text3: #555570;
+    --radius: 16px;
+    --shadow: 0 24px 80px rgba(0,0,0,0.6);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    top: -50%;
+    left: -20%;
+    width: 60vw;
+    height: 60vw;
+    background: radial-gradient(circle, rgba(108,99,255,0.12) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  body::after {
+    content: '';
+    position: fixed;
+    bottom: -30%;
+    right: -10%;
+    width: 50vw;
+    height: 50vw;
+    background: radial-gradient(circle, rgba(67,232,180,0.08) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ===== AUTH SCREEN ===== */
+  #auth-screen {
+    position: fixed; inset: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--bg);
+  }
+  .auth-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 52px 48px;
+    width: 440px;
+    max-width: 95vw;
+    box-shadow: var(--shadow), 0 0 0 1px rgba(108,99,255,0.1);
+    position: relative;
+    overflow: hidden;
+    animation: fadeUp 0.6s ease;
+  }
+  .auth-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--accent3));
+  }
+  .auth-logo {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 36px;
+  }
+  .auth-logo-icon {
+    width: 44px; height: 44px;
+    background: linear-gradient(135deg, var(--accent), var(--accent3));
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+  }
+  .auth-logo-text {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 20px;
+    letter-spacing: -0.5px;
+  }
+  .auth-logo-text span { color: var(--accent3); }
+  .auth-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 6px;
+    letter-spacing: -0.5px;
+  }
+  .auth-sub { color: var(--text2); font-size: 14px; margin-bottom: 32px; }
+  .tab-row {
+    display: flex; gap: 0;
+    background: var(--surface2);
+    border-radius: 10px;
+    padding: 4px;
+    margin-bottom: 28px;
+  }
+  .tab-btn {
+    flex: 1; padding: 9px 0;
+    background: none; border: none;
+    color: var(--text2);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px; font-weight: 500;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .tab-btn.active {
+    background: var(--accent);
+    color: #fff;
+  }
+  .form-group { margin-bottom: 18px; }
+  .form-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text2);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .form-input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 13px 16px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    transition: border-color 0.2s;
+    outline: none;
+  }
+  .form-input:focus { border-color: var(--accent); }
+  .auth-btn {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, var(--accent), #8b7fff);
+    border: none;
+    border-radius: 10px;
+    color: #fff;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 15px;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+    margin-top: 6px;
+  }
+  .auth-btn:hover { opacity: 0.9; }
+  .auth-btn:active { transform: scale(0.99); }
+  .auth-divider {
+    text-align: center;
+    color: var(--text3);
+    font-size: 13px;
+    margin: 20px 0;
+    position: relative;
+  }
+  .auth-divider::before, .auth-divider::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    width: calc(50% - 30px);
+    height: 1px;
+    background: var(--border);
+  }
+  .auth-divider::before { left: 0; }
+  .auth-divider::after { right: 0; }
+  .demo-hint {
+    font-size: 12px;
+    color: var(--text3);
+    text-align: center;
+    margin-top: 16px;
+  }
+  .demo-hint strong { color: var(--accent3); cursor: pointer; }
+
+  /* ===== MAIN APP ===== */
+  #app { display: none; min-height: 100vh; position: relative; z-index: 1; }
+  
+  /* NAV */
+  .navbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 32px;
+    height: 64px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(10,10,15,0.8);
+    backdrop-filter: blur(20px);
+    position: sticky; top: 0; z-index: 50;
+  }
+  .nav-logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 18px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .nav-logo-icon {
+    width: 32px; height: 32px;
+    background: linear-gradient(135deg, var(--accent), var(--accent3));
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+  .nav-logo span { color: var(--accent3); }
+  .nav-actions { display: flex; align-items: center; gap: 16px; }
+  .nav-user {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 14px; color: var(--text2);
+  }
+  .nav-avatar {
+    width: 34px; height: 34px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700;
+    font-size: 13px;
+    color: #fff;
+  }
+  .btn-ghost {
+    background: none;
+    border: 1.5px solid var(--border);
+    color: var(--text2);
+    padding: 7px 16px;
+    border-radius: 8px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--text); }
+
+  /* MAIN LAYOUT */
+  .main-layout {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    height: calc(100vh - 64px);
+    overflow: hidden;
+  }
+  
+  /* SIDEBAR */
+  .sidebar {
+    border-right: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .sidebar-head {
+    padding: 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  .sidebar-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 16px;
+    margin-bottom: 4px;
+  }
+  .sidebar-sub { font-size: 12px; color: var(--text2); }
+  
+  /* UPLOAD ZONE */
+  .upload-zone {
+    margin: 20px;
+    border: 2px dashed var(--border);
+    border-radius: 16px;
+    padding: 32px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    background: rgba(108,99,255,0.03);
+  }
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(108,99,255,0.08);
+  }
+  .upload-icon { font-size: 36px; margin-bottom: 12px; }
+  .upload-text { font-size: 14px; color: var(--text2); margin-bottom: 6px; }
+  .upload-text strong { color: var(--accent); }
+  .upload-hint { font-size: 11px; color: var(--text3); }
+  #file-input { display: none; }
+  
+  /* HISTORY */
+  .history-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 20px 20px;
+  }
+  .history-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text3);
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+  .history-item {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .history-item:hover { border-color: var(--accent); }
+  .history-item.active { border-color: var(--accent); background: rgba(108,99,255,0.1); }
+  .history-thumb {
+    width: 44px; height: 44px;
+    border-radius: 8px;
+    object-fit: cover;
+    background: var(--surface);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+  .history-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .history-info { flex: 1; min-width: 0; }
+  .history-name {
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 3px;
+  }
+  .history-date { font-size: 11px; color: var(--text3); }
+  .history-del {
+    background: none;
+    border: none;
+    color: var(--text3);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    font-size: 14px;
+    transition: color 0.2s;
+  }
+  .history-del:hover { color: var(--accent2); }
+  .empty-history {
+    text-align: center;
+    color: var(--text3);
+    font-size: 13px;
+    padding: 24px 0;
+  }
+
+  /* MAIN CONTENT */
+  .content-area {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  /* TOOLBAR */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-wrap: wrap;
+  }
+  .toolbar-group {
+    display: flex; gap: 4px; align-items: center;
+    border-right: 1px solid var(--border);
+    padding-right: 10px;
+    margin-right: 2px;
+  }
+  .toolbar-group:last-child { border-right: none; }
+  .tool-btn {
+    background: none;
+    border: none;
+    color: var(--text2);
+    padding: 7px 10px;
+    border-radius: 7px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+    font-family: 'DM Sans', sans-serif;
+    white-space: nowrap;
+  }
+  .tool-btn:hover { background: var(--surface2); color: var(--text); }
+  .tool-btn.active { background: rgba(108,99,255,0.15); color: var(--accent); }
+  .tool-select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 7px;
+    padding: 6px 10px;
+    font-size: 13px;
+    font-family: 'DM Sans', sans-serif;
+    cursor: pointer;
+    outline: none;
+  }
+  .tool-color {
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    border: 2px solid var(--border);
+    cursor: pointer;
+    padding: 0;
+  }
+  .save-btn {
+    background: linear-gradient(135deg, var(--accent), #8b7fff);
+    border: none;
+    color: #fff;
+    padding: 8px 18px;
+    border-radius: 8px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    margin-left: auto;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .save-btn:hover { opacity: 0.85; }
+  .save-dropdown { position: relative; }
+  .save-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 8px;
+    min-width: 180px;
+    box-shadow: var(--shadow);
+    display: none;
+    z-index: 100;
+  }
+  .save-menu.open { display: block; animation: fadeDown 0.15s ease; }
+  .save-menu-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.15s;
+  }
+  .save-menu-item:hover { background: var(--surface2); }
+  .save-menu-item .mi-icon { font-size: 18px; }
+
+  /* WORKSPACE */
+  .workspace {
+    flex: 1;
+    overflow: auto;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 32px;
+    gap: 32px;
+  }
+
+  /* WELCOME PANEL */
+  #welcome-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 400px;
+    flex: 1;
+    text-align: center;
+  }
+  .welcome-icon { font-size: 72px; margin-bottom: 24px; opacity: 0.3; }
+  .welcome-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    color: var(--text2);
+  }
+  .welcome-sub { font-size: 14px; color: var(--text3); max-width: 320px; line-height: 1.6; }
+
+  /* PANELS */
+  #processing-panel { display: none; width: 100%; max-width: 800px; }
+  #result-panel { display: none; width: 100%; max-width: 1100px; gap: 24px; display: none; }
+
+  .panel-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    overflow: hidden;
+  }
+  .panel-card-head {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .panel-card-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .badge {
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 20px;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .badge-purple { background: rgba(108,99,255,0.2); color: var(--accent); }
+  .badge-green { background: rgba(67,232,180,0.15); color: var(--accent3); }
+  .badge-orange { background: rgba(255,165,0,0.15); color: orange; }
+
+  /* IMAGE PREVIEW */
+  .img-preview-wrap { padding: 16px; }
+  #source-image {
+    width: 100%;
+    max-height: 400px;
+    object-fit: contain;
+    border-radius: 12px;
+    background: #000;
+  }
+
+  /* PROGRESS */
+  .progress-wrap { padding: 24px; }
+  .progress-label {
+    display: flex; justify-content: space-between;
+    font-size: 13px; color: var(--text2);
+    margin-bottom: 10px;
+  }
+  .progress-bar-bg {
+    height: 8px;
+    background: var(--surface2);
+    border-radius: 20px;
+    overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent3));
+    border-radius: 20px;
+    width: 0%;
+    transition: width 0.3s ease;
+  }
+  .progress-status { font-size: 12px; color: var(--text3); margin-top: 8px; }
+
+  /* EDITABLE DOCUMENT */
+  .doc-container {
+    flex: 1;
+    padding: 16px;
+  }
+  #editable-doc {
+    background: #fff;
+    color: #111;
+    border-radius: 12px;
+    padding: 72px 80px;
+    min-height: 600px;
+    font-size: 14px;
+    line-height: 1.7;
+    outline: none;
+    font-family: 'DM Sans', sans-serif;
+    box-shadow: 0 4px 40px rgba(0,0,0,0.3);
+    position: relative;
+    word-break: break-word;
+  }
+  #editable-doc:focus { outline: none; }
+  #editable-doc table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 12px 0;
+  }
+  #editable-doc table td, #editable-doc table th {
+    border: 1px solid #ccc;
+    padding: 8px 12px;
+  }
+  #editable-doc table th { background: #f0f0f0; font-weight: 600; }
+  #editable-doc img {
+    max-width: 100%;
+    border-radius: 4px;
+  }
+
+  /* SPLIT VIEW */
+  .result-split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    width: 100%;
+  }
+  @media (max-width: 900px) {
+    .result-split { grid-template-columns: 1fr; }
+    .main-layout { grid-template-columns: 1fr; }
+  }
+
+  /* TOAST */
+  .toast-container {
+    position: fixed;
+    bottom: 32px;
+    right: 32px;
+    z-index: 999;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .toast {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 20px;
+    font-size: 14px;
+    display: flex; align-items: center; gap: 10px;
+    animation: toastIn 0.3s ease;
+    box-shadow: var(--shadow);
+    max-width: 320px;
+  }
+  .toast.success { border-color: var(--accent3); }
+  .toast.error { border-color: var(--accent2); }
+
+  /* MODAL */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(4px);
+    z-index: 200;
+    display: flex; align-items: center; justify-content: center;
+    display: none;
+  }
+  .modal-overlay.open { display: flex; animation: fadeIn 0.2s ease; }
+  .modal-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 32px;
+    max-width: 480px;
+    width: 95%;
+    box-shadow: var(--shadow);
+  }
+  .modal-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .modal-sub { color: var(--text2); font-size: 14px; margin-bottom: 24px; }
+  .modal-actions { display: flex; gap: 12px; margin-top: 24px; }
+  .btn-cancel {
+    flex: 1; padding: 12px;
+    background: var(--surface2);
+    border: 1.5px solid var(--border);
+    color: var(--text);
+    border-radius: 10px;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    transition: all 0.2s;
+  }
+  .btn-primary {
+    flex: 1; padding: 12px;
+    background: linear-gradient(135deg, var(--accent), #8b7fff);
+    border: none;
+    color: #fff;
+    border-radius: 10px;
+    cursor: pointer;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+  }
+  .filename-input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    outline: none;
+    margin-bottom: 12px;
+  }
+  .filename-input:focus { border-color: var(--accent); }
+  .format-options {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-top: 16px;
+  }
+  .format-opt {
+    background: var(--surface2);
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 8px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .format-opt:hover, .format-opt.selected {
+    border-color: var(--accent);
+    background: rgba(108,99,255,0.1);
+  }
+  .format-opt .fo-icon { font-size: 24px; margin-bottom: 6px; }
+  .format-opt .fo-label { font-size: 12px; font-weight: 600; }
+  .format-opt .fo-sub { font-size: 10px; color: var(--text3); }
+
+  /* STATS BAR */
+  .stats-bar {
+    display: flex;
+    gap: 24px;
+    padding: 10px 24px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text3);
+  }
+  .stat-item { display: flex; gap: 6px; align-items: center; }
+  .stat-val { color: var(--accent3); font-weight: 600; }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* ANIMATIONS */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeDown {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateX(20px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  .spinner {
+    width: 20px; height: 20px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    display: inline-block;
+  }
+
+  .ocr-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    padding: 40px;
+    text-align: center;
+  }
+  .ocr-loader {
+    width: 60px; height: 60px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  .ocr-status-text { font-size: 14px; color: var(--text2); }
+  
+  /* Image overlaid editable elements */
+  .img-text-layer {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none;
+  }
+
+  .char-count {
+    font-size: 11px;
+    color: var(--text3);
+    padding: 0 8px;
+  }
+
+  .accuracy-indicator {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--text2);
+  }
+  .accuracy-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent3);
+  }
+
+  /* Scrollable history */
+  .history-scroll::-webkit-scrollbar { width: 4px; }
+
+  .no-convert-msg {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    color: var(--text3);
+    font-size: 14px;
+    text-align: center;
+    gap: 12px;
+  }
+</style>
+</head>
+<body>
+
+<!-- AUTH SCREEN -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="auth-logo-icon">📄</div>
+      <div class="auth-logo-text">Docu<span>Scan</span> Pro</div>
+    </div>
+    <h1 class="auth-title" id="auth-title">Welcome back</h1>
+    <p class="auth-sub" id="auth-sub">Sign in to your account to continue</p>
+    <div class="tab-row">
+      <button class="tab-btn active" onclick="switchTab('login')">Sign In</button>
+      <button class="tab-btn" onclick="switchTab('register')">Create Account</button>
+    </div>
+    <div id="login-form">
+      <div class="form-group">
+        <label class="form-label">Email Address</label>
+        <input type="email" class="form-input" id="login-email" placeholder="you@example.com" value="demo@docuscan.pro">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input type="password" class="form-input" id="login-password" placeholder="••••••••" value="demo1234">
+      </div>
+      <button class="auth-btn" onclick="doLogin()">Sign In →</button>
+    </div>
+    <div id="register-form" style="display:none">
+      <div class="form-group">
+        <label class="form-label">Full Name</label>
+        <input type="text" class="form-input" id="reg-name" placeholder="John Smith">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email Address</label>
+        <input type="email" class="form-input" id="reg-email" placeholder="you@example.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input type="password" class="form-input" id="reg-password" placeholder="Min. 6 characters">
+      </div>
+      <button class="auth-btn" onclick="doRegister()">Create Account →</button>
+    </div>
+    <p class="demo-hint">Use demo account: <strong onclick="fillDemo()">demo@docuscan.pro / demo1234</strong></p>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
+  <!-- NAVBAR -->
+  <nav class="navbar">
+    <div class="nav-logo">
+      <div class="nav-logo-icon">📄</div>
+      Docu<span>Scan</span> Pro
+    </div>
+    <div class="nav-actions">
+      <div class="nav-user">
+        <div class="nav-avatar" id="user-avatar">U</div>
+        <span id="user-name-display">User</span>
+      </div>
+      <button class="btn-ghost" onclick="doLogout()">Sign Out</button>
+    </div>
+  </nav>
+
+  <!-- MAIN LAYOUT -->
+  <div class="main-layout">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="sidebar-head">
+        <div class="sidebar-title">Convert Image</div>
+        <div class="sidebar-sub">Upload an image to extract & edit its content</div>
+      </div>
+      <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()"
+           ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
+        <div class="upload-icon">🖼️</div>
+        <div class="upload-text"><strong>Click to upload</strong> or drag & drop</div>
+        <div class="upload-hint">PNG, JPG, JPEG, GIF, BMP, TIFF, WebP</div>
+        <div class="upload-hint" style="margin-top:4px">Max 20MB per file</div>
+      </div>
+      <input type="file" id="file-input" accept="image/*" multiple onchange="handleFiles(event)">
+      <div class="history-scroll">
+        <div class="history-label" style="margin-top:4px">Recent Conversions</div>
+        <div id="history-list">
+          <div class="empty-history">No conversions yet.<br>Upload an image to get started.</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- CONTENT AREA -->
+    <div class="content-area">
+      <!-- TOOLBAR -->
+      <div class="toolbar">
+        <div class="toolbar-group">
+          <select class="tool-select" onchange="execCmd('fontName', this.value)" title="Font">
+            <option value="Arial">Arial</option>
+            <option value="Times New Roman">Times New Roman</option>
+            <option value="Courier New">Courier New</option>
+            <option value="Georgia">Georgia</option>
+            <option value="Verdana">Verdana</option>
+            <option value="Helvetica">Helvetica</option>
+          </select>
+          <select class="tool-select" onchange="execCmd('fontSize', this.value)" title="Size">
+            <option value="1">8pt</option>
+            <option value="2">10pt</option>
+            <option value="3" selected>12pt</option>
+            <option value="4">14pt</option>
+            <option value="5">18pt</option>
+            <option value="6">24pt</option>
+            <option value="7">36pt</option>
+          </select>
+        </div>
+        <div class="toolbar-group">
+          <button class="tool-btn" onclick="execCmd('bold')" title="Bold"><b>B</b></button>
+          <button class="tool-btn" onclick="execCmd('italic')" title="Italic"><i>I</i></button>
+          <button class="tool-btn" onclick="execCmd('underline')" title="Underline"><u>U</u></button>
+          <button class="tool-btn" onclick="execCmd('strikeThrough')" title="Strikethrough"><s>S</s></button>
+        </div>
+        <div class="toolbar-group">
+          <button class="tool-btn" onclick="execCmd('justifyLeft')" title="Align Left">≡</button>
+          <button class="tool-btn" onclick="execCmd('justifyCenter')" title="Center">≡</button>
+          <button class="tool-btn" onclick="execCmd('justifyRight')" title="Align Right">≡</button>
+          <button class="tool-btn" onclick="execCmd('justifyFull')" title="Justify">≡</button>
+        </div>
+        <div class="toolbar-group">
+          <button class="tool-btn" onclick="execCmd('insertUnorderedList')" title="Bullet List">• List</button>
+          <button class="tool-btn" onclick="execCmd('insertOrderedList')" title="Numbered List">1. List</button>
+          <button class="tool-btn" onclick="execCmd('indent')" title="Indent">→</button>
+          <button class="tool-btn" onclick="execCmd('outdent')" title="Outdent">←</button>
+        </div>
+        <div class="toolbar-group">
+          <input type="color" class="tool-color" value="#111111" onchange="execCmd('foreColor', this.value)" title="Text Color">
+          <input type="color" class="tool-color" value="#ffff00" onchange="execCmd('hiliteColor', this.value)" title="Highlight">
+        </div>
+        <div class="toolbar-group">
+          <button class="tool-btn" onclick="execCmd('undo')" title="Undo">↩</button>
+          <button class="tool-btn" onclick="execCmd('redo')" title="Redo">↪</button>
+        </div>
+        <span class="char-count" id="char-count">0 words</span>
+        <div class="save-dropdown">
+          <button class="save-btn" onclick="toggleSaveMenu(event)">
+            💾 Save Document ▾
+          </button>
+          <div class="save-menu" id="save-menu">
+            <div class="save-menu-item" onclick="saveAs('docx')">
+              <span class="mi-icon">📝</span>
+              <div>
+                <div style="font-weight:600">Word Document</div>
+                <div style="font-size:11px;color:var(--text3)">.docx format</div>
+              </div>
+            </div>
+            <div class="save-menu-item" onclick="saveAs('pdf')">
+              <span class="mi-icon">📋</span>
+              <div>
+                <div style="font-weight:600">PDF File</div>
+                <div style="font-size:11px;color:var(--text3)">.pdf format</div>
+              </div>
+            </div>
+            <div class="save-menu-item" onclick="saveAs('html')">
+              <span class="mi-icon">🌐</span>
+              <div>
+                <div style="font-weight:600">HTML File</div>
+                <div style="font-size:11px;color:var(--text3)">.html format</div>
+              </div>
+            </div>
+            <div class="save-menu-item" onclick="saveAs('txt')">
+              <span class="mi-icon">📃</span>
+              <div>
+                <div style="font-weight:600">Plain Text</div>
+                <div style="font-size:11px;color:var(--text3)">.txt format</div>
+              </div>
+            </div>
+            <div class="save-menu-item" onclick="saveAs('md')">
+              <span class="mi-icon">🔣</span>
+              <div>
+                <div style="font-weight:600">Markdown</div>
+                <div style="font-size:11px;color:var(--text3)">.md format</div>
+              </div>
+            </div>
+            <div class="save-menu-item" onclick="saveAs('rtf')">
+              <span class="mi-icon">📄</span>
+              <div>
+                <div style="font-weight:600">Rich Text Format</div>
+                <div style="font-size:11px;color:var(--text3)">.rtf format</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- WORKSPACE -->
+      <div class="workspace" id="workspace">
+        <div id="welcome-panel">
+          <div class="welcome-icon">📄</div>
+          <div class="welcome-title">No document open</div>
+          <div class="welcome-sub">Upload an image from the sidebar to extract and edit its text content in a fully editable document.</div>
+        </div>
+
+        <!-- Result split view -->
+        <div id="result-panel" class="result-split" style="display:none">
+          <!-- Image Panel -->
+          <div class="panel-card" style="align-self:start">
+            <div class="panel-card-head">
+              <div class="panel-card-title">🖼️ Source Image <span class="badge badge-purple">Original</span></div>
+            </div>
+            <div class="img-preview-wrap">
+              <img id="source-image" src="" alt="Source">
+            </div>
+          </div>
+
+          <!-- Document Panel -->
+          <div class="panel-card" style="display:flex;flex-direction:column">
+            <div class="panel-card-head">
+              <div class="panel-card-title">✏️ Editable Document <span class="badge badge-green" id="accuracy-badge">Ready</span></div>
+              <div class="accuracy-indicator">
+                <div class="accuracy-dot"></div>
+                <span id="conf-display">—</span>
+              </div>
+            </div>
+            <!-- OCR Loading -->
+            <div id="ocr-loading" class="ocr-loading" style="display:none">
+              <div class="ocr-loader"></div>
+              <div class="ocr-status-text" id="ocr-status">Analyzing image...</div>
+              <div class="progress-bar-bg" style="width:280px;height:6px">
+                <div class="progress-bar-fill" id="ocr-progress-bar"></div>
+              </div>
+              <div style="font-size:11px;color:var(--text3)" id="ocr-pct">0%</div>
+            </div>
+            <div class="doc-container" id="doc-container" style="display:none">
+              <div id="editable-doc"
+                   contenteditable="true"
+                   spellcheck="true"
+                   oninput="onDocInput()"
+                   onfocus="docFocused()"
+              ></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STATS BAR -->
+      <div class="stats-bar">
+        <div class="stat-item">Words: <span class="stat-val" id="stat-words">0</span></div>
+        <div class="stat-item">Characters: <span class="stat-val" id="stat-chars">0</span></div>
+        <div class="stat-item">Lines: <span class="stat-val" id="stat-lines">0</span></div>
+        <div class="stat-item" id="stat-file-item" style="display:none">File: <span class="stat-val" id="stat-file">—</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SAVE MODAL -->
+<div class="modal-overlay" id="save-modal">
+  <div class="modal-card">
+    <div class="modal-title">💾 Save Document</div>
+    <div class="modal-sub">Choose filename and format</div>
+    <label class="form-label">File Name</label>
+    <input type="text" class="filename-input" id="save-filename" placeholder="my-document">
+    <label class="form-label" style="margin-top:4px">Format</label>
+    <div class="format-options" id="format-options">
+      <div class="format-opt selected" data-fmt="docx" onclick="selectFormat(this)">
+        <div class="fo-icon">📝</div>
+        <div class="fo-label">DOCX</div>
+        <div class="fo-sub">Word</div>
+      </div>
+      <div class="format-opt" data-fmt="pdf" onclick="selectFormat(this)">
+        <div class="fo-icon">📋</div>
+        <div class="fo-label">PDF</div>
+        <div class="fo-sub">PDF</div>
+      </div>
+      <div class="format-opt" data-fmt="html" onclick="selectFormat(this)">
+        <div class="fo-icon">🌐</div>
+        <div class="fo-label">HTML</div>
+        <div class="fo-sub">Web</div>
+      </div>
+      <div class="format-opt" data-fmt="txt" onclick="selectFormat(this)">
+        <div class="fo-icon">📃</div>
+        <div class="fo-label">TXT</div>
+        <div class="fo-sub">Plain</div>
+      </div>
+      <div class="format-opt" data-fmt="md" onclick="selectFormat(this)">
+        <div class="fo-icon">🔣</div>
+        <div class="fo-label">MD</div>
+        <div class="fo-sub">Markdown</div>
+      </div>
+      <div class="format-opt" data-fmt="rtf" onclick="selectFormat(this)">
+        <div class="fo-icon">📄</div>
+        <div class="fo-label">RTF</div>
+        <div class="fo-sub">Rich Text</div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="doSave()">Download →</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div class="toast-container" id="toasts"></div>
+
+<script>
+// ===========================
+// AUTH SYSTEM
+// ===========================
+let currentUser = null;
+let selectedSaveFormat = 'docx';
+let conversions = [];
+let activeConversionId = null;
+
+function getUsers() {
+  try { return JSON.parse(localStorage.getItem('dsp_users') || '[]'); } catch { return []; }
+}
+function saveUsers(u) { localStorage.setItem('dsp_users', JSON.stringify(u)); }
+function getConversions() {
+  if (!currentUser) return [];
+  try { return JSON.parse(localStorage.getItem('dsp_conv_' + currentUser.email) || '[]'); } catch { return []; }
+}
+function saveConversions() {
+  if (!currentUser) return;
+  // Don't store image data in localStorage to avoid quota exceeded
+  const toStore = conversions.map(c => ({...c, imgSrc: c.imgSrc ? '[stored]' : null}));
+  try { localStorage.setItem('dsp_conv_' + currentUser.email, JSON.stringify(toStore)); } catch(e) {}
+}
+
+// Check for existing session
+window.addEventListener('load', () => {
+  const sess = localStorage.getItem('dsp_session');
+  if (sess) {
+    try {
+      currentUser = JSON.parse(sess);
+      loginSuccess();
+    } catch {}
+  }
+  // Add demo user if not exists
+  const users = getUsers();
+  if (!users.find(u => u.email === 'demo@docuscan.pro')) {
+    users.push({ name: 'Demo User', email: 'demo@docuscan.pro', password: 'demo1234' });
+    saveUsers(users);
+  }
+});
+
+function switchTab(tab) {
+  const tabs = document.querySelectorAll('.tab-btn');
+  tabs[0].classList.toggle('active', tab === 'login');
+  tabs[1].classList.toggle('active', tab === 'register');
+  document.getElementById('login-form').style.display = tab === 'login' ? '' : 'none';
+  document.getElementById('register-form').style.display = tab === 'register' ? '' : 'none';
+  document.getElementById('auth-title').textContent = tab === 'login' ? 'Welcome back' : 'Create account';
+  document.getElementById('auth-sub').textContent = tab === 'login' ? 'Sign in to your account to continue' : 'Start converting images to editable documents';
+}
+
+function fillDemo() {
+  document.getElementById('login-email').value = 'demo@docuscan.pro';
+  document.getElementById('login-password').value = 'demo1234';
+}
+
+function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass = document.getElementById('login-password').value;
+  if (!email || !pass) { toast('Please fill all fields', 'error'); return; }
+  const users = getUsers();
+  const user = users.find(u => u.email === email && u.password === pass);
+  if (!user) { toast('Invalid email or password', 'error'); return; }
+  currentUser = user;
+  localStorage.setItem('dsp_session', JSON.stringify(user));
+  loginSuccess();
+}
+
+function doRegister() {
+  const name = document.getElementById('reg-name').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const pass = document.getElementById('reg-password').value;
+  if (!name || !email || !pass) { toast('Please fill all fields', 'error'); return; }
+  if (pass.length < 6) { toast('Password must be at least 6 characters', 'error'); return; }
+  const users = getUsers();
+  if (users.find(u => u.email === email)) { toast('Email already registered', 'error'); return; }
+  const user = { name, email, password: pass };
+  users.push(user);
+  saveUsers(users);
+  currentUser = user;
+  localStorage.setItem('dsp_session', JSON.stringify(user));
+  loginSuccess();
+}
+
+function loginSuccess() {
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('user-name-display').textContent = currentUser.name;
+  document.getElementById('user-avatar').textContent = currentUser.name[0].toUpperCase();
+  conversions = getConversions();
+  renderHistory();
+  toast('Welcome back, ' + currentUser.name + '! 👋', 'success');
+}
+
+function doLogout() {
+  localStorage.removeItem('dsp_session');
+  currentUser = null;
+  document.getElementById('auth-screen').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+  location.reload();
+}
+
+// ===========================
+// FILE HANDLING
+// ===========================
+function handleDragOver(e) {
+  e.preventDefault();
+  document.getElementById('upload-zone').classList.add('drag-over');
+}
+function handleDragLeave(e) {
+  document.getElementById('upload-zone').classList.remove('drag-over');
+}
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('upload-zone').classList.remove('drag-over');
+  const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+  if (files.length) processFiles(files);
+}
+function handleFiles(e) {
+  const files = Array.from(e.target.files);
+  if (files.length) processFiles(files);
+  e.target.value = '';
+}
+
+function processFiles(files) {
+  files.forEach(file => {
+    if (file.size > 20 * 1024 * 1024) {
+      toast('File too large: ' + file.name + ' (max 20MB)', 'error');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const id = Date.now() + Math.random().toString(36).slice(2);
+      const conv = {
+        id,
+        name: file.name,
+        date: new Date().toLocaleString(),
+        imgSrc: e.target.result,
+        content: null,
+        confidence: null,
+        status: 'processing'
+      };
+      conversions.unshift(conv);
+      renderHistory();
+      openConversion(id, true);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// ===========================
+// OCR ENGINE
+// ===========================
+async function runOCR(conv) {
+  const doc = document.getElementById('editable-doc');
+  const loadingEl = document.getElementById('ocr-loading');
+  const docContainer = document.getElementById('doc-container');
+  const statusEl = document.getElementById('ocr-status');
+  const progressBar = document.getElementById('ocr-progress-bar');
+  const pctEl = document.getElementById('ocr-pct');
+  const badge = document.getElementById('accuracy-badge');
+
+  loadingEl.style.display = 'flex';
+  docContainer.style.display = 'none';
+
+  try {
+    const result = await Tesseract.recognize(
+      conv.imgSrc,
+      'eng',
+      {
+        logger: m => {
+          if (m.status === 'recognizing text') {
+            const pct = Math.round(m.progress * 100);
+            progressBar.style.width = pct + '%';
+            pctEl.textContent = pct + '%';
+            statusEl.textContent = 'Extracting text... ' + pct + '%';
+          } else if (m.status === 'loading tesseract core') {
+            statusEl.textContent = 'Loading OCR engine...';
+          } else if (m.status === 'initializing tesseract') {
+            statusEl.textContent = 'Initializing...';
+          } else if (m.status === 'loading language traineddata') {
+            statusEl.textContent = 'Loading language model...';
+          }
+        }
+      }
+    );
+
+    const { data } = result;
+    conv.confidence = Math.round(data.confidence);
+    conv.status = 'done';
+
+    // Build structured HTML from OCR blocks
+    const html = buildDocumentHTML(data);
+    conv.content = html;
+    doc.innerHTML = html;
+
+    loadingEl.style.display = 'none';
+    docContainer.style.display = 'flex';
+
+    badge.textContent = conv.confidence + '% confidence';
+    badge.className = 'badge ' + (conv.confidence > 80 ? 'badge-green' : conv.confidence > 60 ? 'badge-orange' : 'badge-orange');
+    document.getElementById('conf-display').textContent = conv.confidence + '% accurate';
+
+    updateStats();
+    saveConversions();
+    renderHistory();
+    toast('✅ Conversion complete! ' + conv.confidence + '% confidence', 'success');
+
+  } catch (err) {
+    conv.status = 'error';
+    loadingEl.style.display = 'none';
+    docContainer.style.display = 'flex';
+    doc.innerHTML = '<p style="color:red">OCR failed: ' + err.message + '</p><p>Please try another image.</p>';
+    toast('OCR failed. Please try a clearer image.', 'error');
+  }
+}
+
+function buildDocumentHTML(data) {
+  if (!data.paragraphs || data.paragraphs.length === 0) {
+    return '<p>' + (data.text || '').replace(/\n\n+/g, '</p><p>').replace(/\n/g, '<br>') + '</p>';
+  }
+
+  let html = '';
+  const lines = data.lines || [];
+
+  // Group lines into paragraphs based on spacing
+  let prevBottom = -1;
+  let paraLines = [];
+  const allParagraphs = [];
+
+  lines.forEach((line, i) => {
+    if (!line.text.trim()) return;
+    const gap = prevBottom >= 0 ? line.bbox.y0 - prevBottom : 0;
+    if (prevBottom >= 0 && gap > line.bbox.y1 - line.bbox.y0) {
+      if (paraLines.length) allParagraphs.push([...paraLines]);
+      paraLines = [];
+    }
+    paraLines.push(line);
+    prevBottom = line.bbox.y1;
+  });
+  if (paraLines.length) allParagraphs.push(paraLines);
+
+  allParagraphs.forEach(pLines => {
+    const text = pLines.map(l => l.text.trim()).join(' ');
+    if (!text) return;
+
+    // Detect likely heading (short, high confidence, large font)
+    const avgConf = pLines.reduce((s, l) => s + l.confidence, 0) / pLines.length;
+    const words = text.split(' ').filter(Boolean);
+    const firstLine = pLines[0];
+    const height = firstLine.bbox.y1 - firstLine.bbox.y0;
+    const isHeading = words.length <= 8 && height > 22 && text === text.toUpperCase() && text.length > 2;
+    const isBold = height > 18 && words.length <= 12;
+
+    if (isHeading) {
+      html += '<h2 style="font-weight:700;margin:16px 0 8px">' + escapeHtml(text) + '</h2>';
+    } else if (isBold && pLines.length === 1) {
+      html += '<p style="font-weight:600;margin:10px 0">' + escapeHtml(text) + '</p>';
+    } else {
+      html += '<p style="margin:8px 0">' + escapeHtml(text) + '</p>';
+    }
+  });
+
+  // Detect tables (lines with multiple tab-separated or spaced columns)
+  // Already embedded in paragraphs; for pure table detection a separate pass would be needed
+
+  return html || '<p>' + escapeHtml(data.text) + '</p>';
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ===========================
+// HISTORY & NAVIGATION
+// ===========================
+function renderHistory() {
+  const list = document.getElementById('history-list');
+  if (!conversions.length) {
+    list.innerHTML = '<div class="empty-history">No conversions yet.<br>Upload an image to get started.</div>';
+    return;
+  }
+  list.innerHTML = conversions.map(c => `
+    <div class="history-item ${c.id === activeConversionId ? 'active' : ''}" onclick="openConversion('${c.id}', false)">
+      <div class="history-thumb">
+        ${c.imgSrc ? `<img src="${c.imgSrc}" alt="">` : '🖼️'}
+      </div>
+      <div class="history-info">
+        <div class="history-name">${c.name}</div>
+        <div class="history-date">${c.date} ${c.status === 'processing' ? '· Processing...' : c.confidence ? '· ' + c.confidence + '%' : ''}</div>
+      </div>
+      <button class="history-del" onclick="deleteConversion(event,'${c.id}')" title="Delete">✕</button>
+    </div>
+  `).join('');
+}
+
+function openConversion(id, runOcr) {
+  activeConversionId = id;
+  const conv = conversions.find(c => c.id === id);
+  if (!conv) return;
+
+  document.getElementById('welcome-panel').style.display = 'none';
+  document.getElementById('result-panel').style.display = 'grid';
+  document.getElementById('source-image').src = conv.imgSrc;
+  document.getElementById('stat-file').textContent = conv.name;
+  document.getElementById('stat-file-item').style.display = '';
+
+  const badge = document.getElementById('accuracy-badge');
+  const confDisplay = document.getElementById('conf-display');
+
+  if (conv.content && !runOcr) {
+    document.getElementById('ocr-loading').style.display = 'none';
+    document.getElementById('doc-container').style.display = 'flex';
+    document.getElementById('editable-doc').innerHTML = conv.content;
+    badge.textContent = conv.confidence + '% confidence';
+    confDisplay.textContent = conv.confidence + '% accurate';
+    updateStats();
+  } else if (runOcr) {
+    runOCR(conv);
+  }
+
+  renderHistory();
+}
+
+function deleteConversion(e, id) {
+  e.stopPropagation();
+  conversions = conversions.filter(c => c.id !== id);
+  if (activeConversionId === id) {
+    activeConversionId = null;
+    document.getElementById('result-panel').style.display = 'none';
+    document.getElementById('welcome-panel').style.display = 'flex';
+  }
+  saveConversions();
+  renderHistory();
+  toast('Conversion deleted', 'success');
+}
+
+// ===========================
+// EDITOR
+// ===========================
+function execCmd(cmd, val) {
+  document.getElementById('editable-doc').focus();
+  document.execCommand(cmd, false, val || null);
+  updateStats();
+}
+
+function onDocInput() {
+  updateStats();
+  // Auto-save content
+  if (activeConversionId) {
+    const conv = conversions.find(c => c.id === activeConversionId);
+    if (conv) {
+      conv.content = document.getElementById('editable-doc').innerHTML;
+      saveConversions();
+    }
+  }
+}
+
+function docFocused() { updateStats(); }
+
+function updateStats() {
+  const doc = document.getElementById('editable-doc');
+  const text = doc.innerText || '';
+  const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+  const chars = text.length;
+  const lines = text.split('\n').length;
+  document.getElementById('stat-words').textContent = words;
+  document.getElementById('stat-chars').textContent = chars;
+  document.getElementById('stat-lines').textContent = lines;
+  document.getElementById('char-count').textContent = words + ' words';
+}
+
+// ===========================
+// SAVE / EXPORT
+// ===========================
+function toggleSaveMenu(e) {
+  e.stopPropagation();
+  const m = document.getElementById('save-menu');
+  m.classList.toggle('open');
+}
+document.addEventListener('click', () => document.getElementById('save-menu').classList.remove('open'));
+
+function saveAs(fmt) {
+  const doc = document.getElementById('editable-doc');
+  if (!doc.innerText.trim()) { toast('No document content to save', 'error'); return; }
+  document.getElementById('save-menu').classList.remove('open');
+  // Pre-set format and show modal
+  selectedSaveFormat = fmt;
+  document.querySelectorAll('.format-opt').forEach(o => {
+    o.classList.toggle('selected', o.dataset.fmt === fmt);
+  });
+  const conv = conversions.find(c => c.id === activeConversionId);
+  const fname = conv ? conv.name.replace(/\.[^.]+$/, '') : 'document';
+  document.getElementById('save-filename').value = fname;
+  document.getElementById('save-modal').classList.add('open');
+}
+
+function selectFormat(el) {
+  document.querySelectorAll('.format-opt').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedSaveFormat = el.dataset.fmt;
+}
+
+function closeModal() {
+  document.getElementById('save-modal').classList.remove('open');
+}
+
+function doSave() {
+  const fname = document.getElementById('save-filename').value.trim() || 'document';
+  closeModal();
+  exportDocument(selectedSaveFormat, fname);
+}
+
+function exportDocument(format, fname) {
+  const doc = document.getElementById('editable-doc');
+  const htmlContent = doc.innerHTML;
+  const textContent = doc.innerText;
+
+  switch (format) {
+    case 'txt':
+      downloadBlob(new Blob([textContent], {type:'text/plain'}), fname + '.txt');
+      toast('Saved as TXT ✅', 'success');
+      break;
+
+    case 'html': {
+      const fullHtml = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>body{font-family:Arial,sans-serif;max-width:800px;margin:40px auto;padding:0 20px;line-height:1.6;color:#111}
+h1,h2,h3{margin-top:24px}table{border-collapse:collapse;width:100%}
+td,th{border:1px solid #ccc;padding:8px}
+</style></head><body>${htmlContent}</body></html>`;
+      downloadBlob(new Blob([fullHtml], {type:'text/html'}), fname + '.html');
+      toast('Saved as HTML ✅', 'success');
+      break;
+    }
+
+    case 'md': {
+      // Basic HTML to Markdown conversion
+      let md = htmlContent
+        .replace(/<h1[^>]*>(.*?)<\/h1>/gi, '# $1\n')
+        .replace(/<h2[^>]*>(.*?)<\/h2>/gi, '## $1\n')
+        .replace(/<h3[^>]*>(.*?)<\/h3>/gi, '### $1\n')
+        .replace(/<strong[^>]*>(.*?)<\/strong>/gi, '**$1**')
+        .replace(/<b[^>]*>(.*?)<\/b>/gi, '**$1**')
+        .replace(/<em[^>]*>(.*?)<\/em>/gi, '*$1*')
+        .replace(/<i[^>]*>(.*?)<\/i>/gi, '*$1*')
+        .replace(/<u[^>]*>(.*?)<\/u>/gi, '__$1__')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/p>/gi, '\n\n')
+        .replace(/<p[^>]*>/gi, '')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&nbsp;/g,' ')
+        .replace(/\n{3,}/g, '\n\n').trim();
+      downloadBlob(new Blob([md], {type:'text/markdown'}), fname + '.md');
+      toast('Saved as Markdown ✅', 'success');
+      break;
+    }
+
+    case 'rtf': {
+      const rtfText = textContent
+        .replace(/\\/g, '\\\\')
+        .replace(/\{/g, '\\{')
+        .replace(/\}/g, '\\}')
+        .replace(/\n/g, '\\par\n');
+      const rtf = `{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Arial;}}\\f0\\fs24 ${rtfText}}`;
+      downloadBlob(new Blob([rtf], {type:'application/rtf'}), fname + '.rtf');
+      toast('Saved as RTF ✅', 'success');
+      break;
+    }
+
+    case 'pdf': {
+      // Use print dialog for PDF
+      const win = window.open('', '_blank');
+      win.document.write(`<!DOCTYPE html>
+<html><head><title>${fname}</title>
+<style>
+  body{font-family:Arial,sans-serif;max-width:800px;margin:40px auto;padding:20px;line-height:1.6;color:#111}
+  @media print { body { margin: 0; } }
+  h1,h2,h3{margin-top:20px}
+  table{border-collapse:collapse;width:100%}
+  td,th{border:1px solid #888;padding:6px 10px}
+  th{background:#eee}
+  img{max-width:100%}
+</style></head>
+<body>${htmlContent}
+<script>window.onload=function(){window.print();}<\/script>
+</body></html>`);
+      win.document.close();
+      toast('PDF dialog opened — use "Save as PDF" in print dialog ✅', 'success');
+      break;
+    }
+
+    case 'docx': {
+      // Generate a proper DOCX using ZIP
+      generateDOCX(htmlContent, textContent, fname);
+      break;
+    }
+  }
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function generateDOCX(htmlContent, textContent, fname) {
+  toast('Generating DOCX...', 'success');
+  
+  try {
+    // Build a proper Word XML document
+    const paragraphs = [];
+    const div = document.createElement('div');
+    div.innerHTML = htmlContent;
+    
+    function nodeToWxml(node) {
+      if (node.nodeType === 3) { // text node
+        const t = node.textContent.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+        return t ? `<w:r><w:t xml:space="preserve">${t}</w:t></w:r>` : '';
+      }
+      if (node.nodeType !== 1) return '';
+      const tag = node.tagName.toLowerCase();
+      const childXml = Array.from(node.childNodes).map(nodeToWxml).join('');
+      
+      if (tag === 'h1') return `<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="32"/></w:rPr><w:t>${node.innerText||''}</w:t></w:r></w:p>`;
+      if (tag === 'h2') return `<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="26"/></w:rPr><w:t>${node.innerText||''}</w:t></w:r></w:p>`;
+      if (tag === 'h3') return `<w:p><w:r><w:rPr><w:b/><w:sz w:val="22"/></w:rPr><w:t>${node.innerText||''}</w:t></w:r></w:p>`;
+      if (tag === 'p') return `<w:p>${childXml}</w:p>`;
+      if (tag === 'br') return `</w:r><w:r><w:br/></w:r><w:r>`;
+      if (tag === 'b' || tag === 'strong') return `<w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">${(node.innerText||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}</w:t></w:r>`;
+      if (tag === 'i' || tag === 'em') return `<w:r><w:rPr><w:i/></w:rPr><w:t xml:space="preserve">${(node.innerText||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}</w:t></w:r>`;
+      if (tag === 'u') return `<w:r><w:rPr><w:u w:val="single"/></w:rPr><w:t xml:space="preserve">${(node.innerText||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}</w:t></w:r>`;
+      if (tag === 'ul') {
+        return Array.from(node.querySelectorAll('li')).map(li => 
+          `<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t>${li.innerText||''}</w:t></w:r></w:p>`
+        ).join('');
+      }
+      if (tag === 'ol') {
+        return Array.from(node.querySelectorAll('li')).map(li => 
+          `<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="2"/></w:numPr></w:pPr><w:r><w:t>${li.innerText||''}</w:t></w:r></w:p>`
+        ).join('');
+      }
+      if (tag === 'table') {
+        let txml = '<w:tbl><w:tblPr><w:tblBorders><w:top w:val="single" w:sz="4"/><w:left w:val="single" w:sz="4"/><w:bottom w:val="single" w:sz="4"/><w:right w:val="single" w:sz="4"/><w:insideH w:val="single" w:sz="4"/><w:insideV w:val="single" w:sz="4"/></w:tblBorders></w:tblPr>';
+        node.querySelectorAll('tr').forEach(tr => {
+          txml += '<w:tr>';
+          tr.querySelectorAll('td,th').forEach(td => {
+            const isH = td.tagName.toLowerCase() === 'th';
+            txml += `<w:tc><w:p><w:r>${isH ? '<w:rPr><w:b/></w:rPr>' : ''}<w:t>${(td.innerText||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}</w:t></w:r></w:p></w:tc>`;
+          });
+          txml += '</w:tr>';
+        });
+        txml += '</w:tbl>';
+        return txml;
+      }
+      return childXml;
+    }
+    
+    const bodyXml = Array.from(div.childNodes).map(nodeToWxml).join('') || 
+      textContent.split('\n').map(l => `<w:p><w:r><w:t xml:space="preserve">${l.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}</w:t></w:r></w:p>`).join('');
+    
+    const docXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas"
+  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+  xmlns:o="urn:schemas-microsoft-com:office:office"
+  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+  xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"
+  xmlns:v="urn:schemas-microsoft-com:vml"
+  xmlns:wp14="http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing"
+  xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+  xmlns:w10="urn:schemas-microsoft-com:office:word"
+  xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+  xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml"
+  xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup"
+  xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk"
+  xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml"
+  xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"
+  mc:Ignorable="w14 wp14">
+<w:body>
+${bodyXml}
+<w:sectPr>
+  <w:pgSz w:w="12240" w:h="15840"/>
+  <w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/>
+</w:sectPr>
+</w:body>
+</w:document>`;
+
+    const relsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`;
+
+    const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:style w:type="paragraph" w:styleId="Normal"><w:name w:val="Normal"/></w:style>
+  <w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/>
+    <w:pPr><w:outlineLvl w:val="0"/></w:pPr>
+    <w:rPr><w:b/><w:sz w:val="32"/></w:rPr>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/>
+    <w:pPr><w:outlineLvl w:val="1"/></w:pPr>
+    <w:rPr><w:b/><w:sz w:val="26"/></w:rPr>
+  </w:style>
+</w:styles>`;
+
+    const contentTypesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+</Types>`;
+
+    const rootRelsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`;
+
+    const zip = new JSZip();
+    zip.file('[Content_Types].xml', contentTypesXml);
+    zip.file('_rels/.rels', rootRelsXml);
+    zip.file('word/document.xml', docXml);
+    zip.file('word/styles.xml', stylesXml);
+    zip.file('word/_rels/document.xml.rels', relsXml);
+
+    const blob = await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+    saveAs(blob, fname + '.docx');
+    toast('Saved as DOCX ✅', 'success');
+  } catch (err) {
+    toast('DOCX generation failed: ' + err.message, 'error');
+  }
+}
+
+// ===========================
+// TOAST SYSTEM
+// ===========================
+function toast(msg, type = 'success') {
+  const container = document.getElementById('toasts');
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.innerHTML = (type === 'success' ? '✅' : '❌') + ' ' + msg;
+  container.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity 0.3s'; setTimeout(() => el.remove(), 300); }, 4000);
+}
+
+// Override saveAs for FileSaver conflict
+const _saveAs = window.saveAs;
+function saveAs(arg1, arg2) {
+  if (typeof arg1 === 'string') {
+    // called from menu
+    exportDocument(arg1, (conversions.find(c => c.id === activeConversionId)?.name.replace(/\.[^.]+$/,'') || 'document'));
+  } else {
+    // called as FileSaver
+    if (typeof _saveAs === 'function') _saveAs(arg1, arg2);
+    else {
+      const url = URL.createObjectURL(arg1);
+      const a = document.createElement('a');
+      a.href = url; a.download = arg2;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  }
+}
+</script>
+</body>
+</html>
