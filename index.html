@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DocuScan Pro — Exact Layout OCR</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
+<script src='https://unpkg.com/tesseract.js@5.1.0/dist/tesseract.min.js'></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
 <style>
@@ -544,7 +544,7 @@ body {
       <div class="fg"><label class="fl">Password</label><input class="fi" id="sp" type="password" placeholder="Min 6 chars"></div>
       <button class="ab" onclick="signup()">Create Account →</button>
     </div>
-    <p class="hint">Demo: <strong onclick="document.getElementById('le').value='demo@docuscan.pro';document.getElementById('lp').value='demo1234'">demo@docuscan.pro / demo1234</strong></p>
+    <p class="hint">Demo: <strong onclick="document.getElementById('le').value='demo@docuscan.pro';document.getElementById('lp').value='demo1234'"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="c2a6a7afad82a6ada1b7b1a1a3acecb2b0ad">[email&#160;protected]</a> / demo1234</strong></p>
   </div>
 </div>
 
@@ -933,25 +933,31 @@ async function runOCR(doc) {
   document.getElementById('prog-bar').style.width = '0%';
   document.getElementById('prog-pct').textContent = '0%';
 
+  let worker = null;
   try {
-    const worker = await Tesseract.createWorker(lang, 1, {
+    // ── Tesseract.js v5 correct API ──
+    worker = await Tesseract.createWorker(lang, 1, {
       logger: m => {
-        if (m.status === 'recognizing text') {
-          const p = Math.round(m.progress*100);
-          document.getElementById('prog-bar').style.width = p+'%';
-          document.getElementById('prog-pct').textContent = p+'%';
-          document.getElementById('prog-sub').textContent = 'Extracting text... '+p+'%';
-        } else {
-          document.getElementById('prog-sub').textContent = m.status;
-        }
+        try {
+          const bar = document.getElementById('prog-bar');
+          const pct = document.getElementById('prog-pct');
+          const sub = document.getElementById('prog-sub');
+          if (!bar) return;
+          if (m.status === 'recognizing text') {
+            const p = Math.round((m.progress||0) * 100);
+            bar.style.width = p + '%';
+            pct.textContent = p + '%';
+            sub.textContent = 'Extracting text… ' + p + '%';
+          } else if (m.status) {
+            sub.textContent = m.status.charAt(0).toUpperCase() + m.status.slice(1) + '…';
+          }
+        } catch(e) {}
       }
     });
 
-    // Use PSM 11 for sparse text with no OSD — gets individual word positions
-    await worker.setParameters({ tessedit_pageseg_mode: Tesseract.PSM.AUTO });
-
     const result = await worker.recognize(doc.imgSrc);
     await worker.terminate();
+    worker = null;
 
     const {data} = result;
     doc.conf = Math.round(data.confidence);
@@ -1014,9 +1020,20 @@ async function runOCR(doc) {
     toast('✅ Done! '+blocks.length+' text blocks · '+doc.conf+'% confidence','ok');
 
   } catch(err) {
+    if (worker) { try { await worker.terminate(); } catch(e) {} }
+    console.error('OCR error:', err);
     document.getElementById('progress-overlay').style.display = 'none';
     document.getElementById('result-area').style.display = 'block';
-    toast('OCR failed: '+err.message,'er');
+    // Show image even on failure
+    document.getElementById('orig-img').src = doc.imgSrc;
+    // Show error in doc area
+    const overlay = document.getElementById('text-overlay');
+    if (overlay) overlay.innerHTML = '';
+    document.getElementById('ocr-bg-img').src = doc.imgSrc;
+    document.getElementById('overlay-view').style.display = '';
+    document.getElementById('plain-doc-wrap').style.display = 'none';
+    document.getElementById('plain-doc').innerHTML = '<p style="color:red;font-weight:bold">OCR Error: ' + (err && err.message ? err.message : String(err)) + '</p><p>Tips: Make sure the image is clear and well-lit. Try a higher resolution image.</p>';
+    toast('OCR failed: ' + (err && err.message ? err.message : 'Unknown error'), 'er');
   }
 }
 
@@ -1024,33 +1041,33 @@ async function runOCR(doc) {
 // BUILD OVERLAY (image + positioned text)
 // ════════════════════════════════════
 function buildOverlay(doc) {
-  const wrap = document.getElementById('ocr-canvas-wrap');
   const bgImg = document.getElementById('ocr-bg-img');
   const overlay = document.getElementById('text-overlay');
 
-  bgImg.src = doc.imgSrc;
-  bgImg.style.display = 'block';
+  overlay.innerHTML = '';
 
-  bgImg.onload = () => {
-    const dispW = bgImg.clientWidth || bgImg.naturalWidth;
-    const dispH = bgImg.clientHeight || bgImg.naturalHeight;
+  function renderBlocks() {
+    const dispW = bgImg.offsetWidth || bgImg.naturalWidth;
+    const dispH = bgImg.offsetHeight || bgImg.naturalHeight;
     const natW = bgImg.naturalWidth;
     const natH = bgImg.naturalHeight;
+    if (!natW || !natH || !dispW) return;
+
     const scaleX = dispW / natW;
     const scaleY = dispH / natH;
 
+    overlay.style.width = dispW + 'px';
+    overlay.style.height = dispH + 'px';
     overlay.innerHTML = '';
-    overlay.style.width = dispW+'px';
-    overlay.style.height = dispH+'px';
 
     if (!doc.overlayBlocks) return;
 
     doc.overlayBlocks.forEach((b, i) => {
       const left = Math.round(b.x * scaleX);
-      const top = Math.round(b.y * scaleY);
-      const width = Math.round(b.w * scaleX);
-      const height = Math.round(b.h * scaleY);
-      const fs = Math.max(7, Math.round(b.fontSize * scaleY));
+      const top  = Math.round(b.y * scaleY);
+      const w    = Math.round(b.w * scaleX);
+      const h    = Math.max(14, Math.round(b.h * scaleY));
+      const fs   = Math.max(7, Math.round(b.fontSize * Math.min(scaleX, scaleY)));
 
       const div = document.createElement('div');
       div.className = 'text-block';
@@ -1058,39 +1075,38 @@ function buildOverlay(doc) {
       div.spellcheck = true;
       div.textContent = b.text;
       div.dir = b.isRtl ? 'rtl' : 'ltr';
-      div.style.cssText = `
-        left:${left}px; top:${top}px;
-        width:${width}px; min-height:${height}px;
-        font-size:${fs}px;
-        color: rgba(0,0,0,0);
-        /* transparent so underlying image shows, but on focus becomes visible */
-      `;
-      // On focus show text (user editing)
+      div.style.cssText = `left:${left}px;top:${top}px;width:${w}px;min-height:${h}px;font-size:${fs}px;color:rgba(0,0,0,0);`;
+
       div.addEventListener('focus', () => {
         div.style.color = '#111';
-        div.style.background = 'rgba(255,255,200,0.92)';
+        div.style.background = 'rgba(255,255,180,0.96)';
         div.style.zIndex = '20';
+        div.style.minWidth = Math.max(w, 120) + 'px';
       });
       div.addEventListener('blur', () => {
         div.style.color = 'rgba(0,0,0,0)';
         div.style.background = 'transparent';
         div.style.zIndex = '';
-      });
-      div.addEventListener('input', () => {
-        // sync back to block
+        div.style.minWidth = '';
         doc.overlayBlocks[i].text = div.textContent;
         doc.plainHtml = rebuildPlainHtml(doc);
         onEdit();
       });
-      div.title = 'Click to edit — "' + b.text.slice(0,40) + (b.text.length>40?'...':'') + '"';
+      div.title = 'Click to edit: "' + b.text.slice(0, 50) + (b.text.length > 50 ? '…' : '') + '"';
       overlay.appendChild(div);
     });
 
-    // Update stats
     document.getElementById('s-blocks').textContent = doc.overlayBlocks.length;
-  };
-  // If already loaded
-  if (bgImg.complete && bgImg.naturalWidth) bgImg.onload();
+  }
+
+  if (bgImg.src !== doc.imgSrc) {
+    bgImg.onload = () => setTimeout(renderBlocks, 50);
+    bgImg.src = doc.imgSrc;
+  } else if (bgImg.complete && bgImg.naturalWidth) {
+    setTimeout(renderBlocks, 50);
+  } else {
+    bgImg.onload = () => setTimeout(renderBlocks, 50);
+  }
 }
 
 // ════════════════════════════════════
@@ -1444,9 +1460,9 @@ function toast(msg, type='ok') {
 let resizeTimer;
 window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => {
-    if (curView==='overlay' && activeId) {
-      const doc = docs.find(d=>d.id===activeId);
+   resizeTimer = setTimeout(() => {
+    if (curView === 'overlay' && activeId) {
+      const doc = docs.find(d => d.id === activeId);
       if (doc && doc.overlayBlocks) buildOverlay(doc);
     }
   }, 200);
